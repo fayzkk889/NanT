@@ -1,0 +1,424 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "id": "original-fixture",
+    "url": null,
+    "title": "Build a reversible character tokenizer",
+    "author": "Course Zero · original test lesson",
+    "synthetic": true,
+    "metadataOrigin": "Bundled authored fixture, not a recording"
+  },
+  "provenance": "Original eight-minute teaching fixture authored for this MVP. All timestamps simulate a lesson timeline. No Karpathy transcript, video frames, or narration are included.",
+  "chapter": {
+    "start": 0,
+    "end": 480,
+    "segments": [
+      {
+        "id": "s00001",
+        "start": 0,
+        "end": 60,
+        "text": "A language model works with numbers, but our training material starts as text. Before building a model, we need a reversible way to move between those two representations. We will use a deliberately small corpus: the six-character string ababa!. Our goal is to turn each character into an integer and then recover exactly the original string. We are not predicting anything yet. This is only a representation step.\n\nKeep three different quantities separate. The text has six positions. It uses three distinct characters: a, b, and the exclamation mark. Each position will become one token, while the vocabulary will contain one entry per distinct character. A repeated a must receive the same ID every time. These IDs are labels, not numerical measurements: assigning a larger number to b would not make b more important than a.",
+        "heading": "Start with something we can reverse"
+      },
+      {
+        "id": "s00002",
+        "start": 60,
+        "end": 120,
+        "text": "Let us start with a set, which removes duplicates. Converting the set into a list gives us a vocabulary we can index. The first version uses chars.index to find each character's position and stores those positions in a list. This is enough to encode our tiny text. Notice what the code on screen actually does: it searches the vocabulary again for every character, rather than preparing a lookup table once.\n\nThere is also a reproducibility problem. We have not said what order the vocabulary should use. A Python set does not promise a stable character ordering across runs, so token IDs from this version should not become a persistent file format. Do not memorize the particular IDs you happen to see. The same vocabulary ordering must be used wherever we encode and decode. We will fix that ordering before building anything on top of these IDs.",
+        "heading": "The first version: discover the vocabulary"
+      },
+      {
+        "id": "s00003",
+        "start": 120,
+        "end": 180,
+        "text": "We now replace the vocabulary list with sorted(set(text)). For this corpus, the sorted list is exclamation mark, a, then b. Enumerating that list gives us a dictionary from each character to its integer ID: exclamation mark maps to zero, a to one, and b to two. This is the mapping visible on screen.\n\nThe encoder becomes a dictionary lookup for each character. Encoding ababa! therefore produces 1, 2, 1, 2, 1, 0, in that order. Compare this with the earlier version: the input has not changed, and we still produce one integer per character. What changed is how we choose the vocabulary ordering and how we perform each lookup. Sorting makes this example reproducible for the same character set. It does not make the IDs universal across datasets: adding another character can change the sorted ordering, so a trained model's vocabulary must be saved with it.",
+        "heading": "Make the mapping deterministic"
+      },
+      {
+        "id": "s00004",
+        "start": 180,
+        "end": 240,
+        "text": "To recover text, invert the mapping. The integer-to-string dictionary maps zero to the exclamation mark, one to a, and two to b. For each input ID, look up its character, then join the resulting characters with an empty separator. A space separator would silently introduce characters that were never in the source.\n\nHere is the first useful invariant: decode(encode(text)) must equal text. The terminal shows the encoded list followed by ababa!, and the assertion passes. This checks the composition of our encoder and decoder on the original example. It does not prove correctness for every possible string or ID, but it catches several common mistakes: mismatched dictionaries, reordered positions, and the wrong join separator. Keep the check beside the implementation as we change it. We have a reversible representation for strings made entirely from the current vocabulary.",
+        "heading": "Build the inverse and check the round trip"
+      },
+      {
+        "id": "s00005",
+        "start": 240,
+        "end": 300,
+        "text": "Now try to encode a question mark. Our corpus never contained one, so the string-to-integer dictionary has no entry for it. The first dictionary encoder raises a KeyError. This is an expected boundary of the implementation, not evidence that the mapping for ababa! stopped working.\n\nA tempting response is to map an unknown character to zero. In our vocabulary, however, zero already means exclamation mark. That would make decoding a question mark return an exclamation mark, destroying the round-trip property without telling the caller. We will not make that substitution. For this lesson, we will reject unknown characters explicitly and report which character was missing. A production tokenizer could choose a different policy, but that policy would need a deliberately designed representation. The terminal error is part of the lesson: it explains why the next code change is necessary.",
+        "heading": "Expose the boundary instead of hiding it"
+      },
+      {
+        "id": "s00006",
+        "start": 300,
+        "end": 360,
+        "text": "Replace the small encoder expression with a named function. It still visits input characters in order and returns the same list for valid text. The difference is the boundary check: before looking up a character, test whether it belongs to the vocabulary. If not, raise a ValueError that includes the character's representation.\n\nThe terminal now shows ValueError: unknown character: '?' when we attempt the same unsupported input. This is a clearer message for a caller than a raw dictionary KeyError. We have changed the failure behavior, while preserving successful encodings. Run the original round-trip assertion again after replacing encode. It still passes. This is why we kept an invariant close to the code: the improvement to error handling should not accidentally change IDs, skip repeated characters, or return a partially encoded result. The function either returns the complete encoding or raises an exception.",
+        "heading": "Improve the error while preserving the contract"
+      },
+      {
+        "id": "s00007",
+        "start": 360,
+        "end": 420,
+        "text": "Look at the six boxes in the diagram. The top row contains a, b, a, b, a, exclamation mark. The bottom row contains 1, 2, 1, 2, 1, 0. A vertical arrow joins each character to exactly one ID at the same position. The repeated a characters occupy three different sequence positions but share the same vocabulary ID.\n\nThis distinction matters when the sequence later becomes model input. The list preserves the order of occurrences. The vocabulary dictionary stores the identity mapping, not the whole text. A set of the token IDs would throw away both repetitions and ordering, so it could not be decoded back into the original string. We also have not added a start token, an end token, padding, or a batch dimension. The exclamation mark is ordinary data in our example; it has no special control meaning merely because its ID is zero.",
+        "heading": "Read the sequence as positions, not categories"
+      },
+      {
+        "id": "s00008",
+        "start": 420,
+        "end": 480,
+        "text": "Run the complete file from top to bottom. It prints the vocabulary, the encoded sequence, and the decoded text. The round-trip assertion passes. A separate deliberate call with a question mark raises the explicit error; keep that call outside the successful main path when you want the file to finish normally.\n\nWe now have three pieces that must stay together: an ordered vocabulary, an encoder that rejects unsupported characters, and a decoder using the inverse vocabulary. The example remains small enough that we can inspect every value manually. We have not trained a language model, compressed the data, or discovered relationships between characters. We have only established a reversible numeric representation with a clear failure boundary. That is a useful stopping point: the next stage can consume these IDs without confusing a representation bug with a modeling problem. Save the vocabulary whenever you save data or weights that depend on its IDs.",
+        "heading": "Leave with a small, working boundary"
+      }
+    ],
+    "actualStart": 0,
+    "actualEnd": 480
+  },
+  "chapterPlan": [
+    {
+      "index": 0,
+      "start": 0,
+      "end": 480,
+      "segmentIds": [
+        "s00001",
+        "s00002",
+        "s00003",
+        "s00004",
+        "s00005",
+        "s00006",
+        "s00007",
+        "s00008"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "e0001",
+      "at": 65,
+      "kind": "code",
+      "title": "Version 1 · vocabulary search",
+      "content": "text = \"ababa!\"\nchars = list(set(text))\nencode = lambda s: [chars.index(c) for c in s]\nids = encode(text)\n# Set ordering is not a persistent vocabulary contract.",
+      "language": "python",
+      "origin": "Authored fixture code state",
+      "image": null
+    },
+    {
+      "id": "e0002",
+      "at": 130,
+      "kind": "code",
+      "title": "Version 2 · deterministic lookup",
+      "content": "text = \"ababa!\"\nchars = sorted(set(text))\nstoi = {ch: i for i, ch in enumerate(chars)}\nencode = lambda s: [stoi[c] for c in s]\nprint(chars)\nprint(encode(text))",
+      "language": "python",
+      "origin": "Authored fixture code state",
+      "image": null
+    },
+    {
+      "id": "e0003",
+      "at": 150,
+      "kind": "terminal",
+      "title": "Vocabulary and token IDs",
+      "content": "['!', 'a', 'b']\n[1, 2, 1, 2, 1, 0]",
+      "language": "text",
+      "origin": "Expected fixture output",
+      "image": null
+    },
+    {
+      "id": "e0004",
+      "at": 195,
+      "kind": "code",
+      "title": "Add the inverse mapping",
+      "content": "itos = {i: ch for ch, i in stoi.items()}\ndecode = lambda ids: ''.join(itos[i] for i in ids)\nprint(decode(encode(text)))\nassert decode(encode(text)) == text",
+      "language": "python",
+      "origin": "Authored fixture code addition",
+      "image": null
+    },
+    {
+      "id": "e0005",
+      "at": 220,
+      "kind": "terminal",
+      "title": "Round trip",
+      "content": "ababa!\n# The assertion passes without printing anything.",
+      "language": "text",
+      "origin": "Expected fixture output",
+      "image": null
+    },
+    {
+      "id": "e0006",
+      "at": 255,
+      "kind": "code",
+      "title": "Deliberately test an unknown character",
+      "content": "encode(\"?\")\n# Raises KeyError: '?' with Version 2.",
+      "language": "python",
+      "origin": "Authored fixture demonstration; run separately",
+      "image": null
+    },
+    {
+      "id": "e0007",
+      "at": 310,
+      "kind": "code",
+      "title": "Version 3 · an explicit failure boundary",
+      "content": "def encode(s):\n    ids = []\n    for c in s:\n        if c not in stoi:\n            raise ValueError(f\"unknown character: {c!r}\")\n        ids.append(stoi[c])\n    return ids\n\nassert decode(encode(text)) == text",
+      "language": "python",
+      "origin": "Authored fixture replacement for encode",
+      "image": null
+    },
+    {
+      "id": "e0008",
+      "at": 330,
+      "kind": "terminal",
+      "title": "The improved error",
+      "content": "ValueError: unknown character: '?'",
+      "language": "text",
+      "origin": "Expected fixture exception message; traceback omitted",
+      "image": null
+    },
+    {
+      "id": "e0009",
+      "at": 365,
+      "kind": "diagram",
+      "title": "Six positions, three vocabulary entries",
+      "content": "Characters:   a   b   a   b   a   !\n              ↓   ↓   ↓   ↓   ↓   ↓\nToken IDs:    1   2   1   2   1   0\n\nEach vertical arrow preserves position. Repeated characters share an ID.",
+      "language": "text",
+      "origin": "Authored fixture diagram transcription",
+      "image": null
+    },
+    {
+      "id": "e0010",
+      "at": 440,
+      "kind": "code",
+      "title": "Complete runnable lesson",
+      "content": "text = \"ababa!\"\nchars = sorted(set(text))\nstoi = {ch: i for i, ch in enumerate(chars)}\nitos = {i: ch for ch, i in stoi.items()}\n\ndef encode(s):\n    ids = []\n    for c in s:\n        if c not in stoi:\n            raise ValueError(f\"unknown character: {c!r}\")\n        ids.append(stoi[c])\n    return ids\n\ndef decode(ids):\n    return ''.join(itos[i] for i in ids)\n\nprint(chars)\nprint(encode(text))\nprint(decode(encode(text)))\nassert decode(encode(text)) == text\n# Run encode(\"?\") separately to demonstrate the error.",
+      "language": "python",
+      "origin": "Authored fixture final state; earlier states remain above",
+      "image": null
+    }
+  ],
+  "framePlan": [
+    {
+      "at": 0,
+      "reason": "Periodic screen check",
+      "evidenceIds": [],
+      "status": "capture-needed"
+    },
+    {
+      "at": 60,
+      "reason": "Speech refers to visible code, output, or a diagram",
+      "evidenceIds": [],
+      "status": "capture-needed"
+    },
+    {
+      "at": 65,
+      "reason": "Supplied code evidence",
+      "evidenceIds": [
+        "e0001"
+      ],
+      "status": "record-supplied"
+    },
+    {
+      "at": 120,
+      "reason": "Speech refers to visible code, output, or a diagram",
+      "evidenceIds": [],
+      "status": "capture-needed"
+    },
+    {
+      "at": 130,
+      "reason": "Supplied code evidence",
+      "evidenceIds": [
+        "e0002"
+      ],
+      "status": "record-supplied"
+    },
+    {
+      "at": 150,
+      "reason": "Supplied terminal evidence",
+      "evidenceIds": [
+        "e0003"
+      ],
+      "status": "record-supplied"
+    },
+    {
+      "at": 180,
+      "reason": "Speech refers to visible code, output, or a diagram",
+      "evidenceIds": [],
+      "status": "capture-needed"
+    },
+    {
+      "at": 195,
+      "reason": "Supplied code evidence",
+      "evidenceIds": [
+        "e0004"
+      ],
+      "status": "record-supplied"
+    },
+    {
+      "at": 220,
+      "reason": "Supplied terminal evidence",
+      "evidenceIds": [
+        "e0005"
+      ],
+      "status": "record-supplied"
+    },
+    {
+      "at": 240,
+      "reason": "Speech refers to visible code, output, or a diagram",
+      "evidenceIds": [],
+      "status": "capture-needed"
+    },
+    {
+      "at": 255,
+      "reason": "Supplied code evidence",
+      "evidenceIds": [
+        "e0006"
+      ],
+      "status": "record-supplied"
+    },
+    {
+      "at": 300,
+      "reason": "Speech refers to visible code, output, or a diagram",
+      "evidenceIds": [],
+      "status": "capture-needed"
+    },
+    {
+      "at": 310,
+      "reason": "Supplied code evidence",
+      "evidenceIds": [
+        "e0007"
+      ],
+      "status": "record-supplied"
+    },
+    {
+      "at": 330,
+      "reason": "Supplied terminal evidence",
+      "evidenceIds": [
+        "e0008"
+      ],
+      "status": "record-supplied"
+    },
+    {
+      "at": 360,
+      "reason": "Speech refers to visible code, output, or a diagram",
+      "evidenceIds": [],
+      "status": "capture-needed"
+    },
+    {
+      "at": 365,
+      "reason": "Supplied diagram evidence",
+      "evidenceIds": [
+        "e0009"
+      ],
+      "status": "record-supplied"
+    },
+    {
+      "at": 420,
+      "reason": "Speech refers to visible code, output, or a diagram",
+      "evidenceIds": [],
+      "status": "capture-needed"
+    },
+    {
+      "at": 440,
+      "reason": "Supplied code evidence",
+      "evidenceIds": [
+        "e0010"
+      ],
+      "status": "record-supplied"
+    }
+  ],
+  "generated": {
+    "draft": {
+      "title": "Establishing a Reversible Numeric Representation for Text",
+      "sections": [
+        {
+          "heading": "Start with something we can reverse",
+          "segment_ids": [
+            "s00001"
+          ],
+          "markdown": "A language model operates fundamentally on numbers, yet our initial training material arrives as text. Before constructing a model, we must establish a reversible mechanism to translate between these two representations. We will begin with a deliberately small corpus: the six-character string `ababa!`. Our objective is to convert each character into an integer and subsequently recover the exact original string from those integers. This exercise is not about predicting future text; it is purely a representation step.\n\nWe must keep three distinct quantities separate in our minds. First, the text has six specific positions. Second, it utilizes three distinct characters: `a`, `b`, and the exclamation mark. Third, each position will become one token, while the vocabulary will contain exactly one entry per distinct character. A repeated `a` must receive the same ID every time it appears. It is crucial to understand that these IDs are labels, not numerical measurements; assigning a larger number to `b` would not imply that `b` is more important than `a`.",
+          "uncertainties": []
+        },
+        {
+          "heading": "The first version: discover the vocabulary",
+          "segment_ids": [
+            "s00002"
+          ],
+          "markdown": "Let us begin by creating a set, which automatically removes duplicates. Converting this set into a list provides us with a vocabulary we can index. The initial implementation uses `chars.index` to find the position of each character and stores those positions in a list. This approach is sufficient to encode our tiny text.\n\nObserve what the code on screen actually does: it searches the vocabulary again for every character, rather than preparing a lookup table once. There is also a reproducibility problem inherent in this method. We have not defined what order the vocabulary should use. Since a Python set does not promise a stable character ordering across different runs, the token IDs generated by this version cannot become a persistent file format. Do not memorize the particular IDs you happen to see; the same vocabulary ordering must be used consistently wherever we encode and decode. We will fix this ordering issue before building anything on top of these IDs.",
+          "uncertainties": []
+        },
+        {
+          "heading": "Make the mapping deterministic",
+          "segment_ids": [
+            "s00003"
+          ],
+          "markdown": "We now replace the vocabulary list with `sorted(set(text))`. For this specific corpus, the sorted list is: exclamation mark, then `a`, then `b`. Enumerating this list gives us a dictionary mapping each character to its integer ID: the exclamation mark maps to zero, `a` to one, and `b` to two. This is the mapping visible on screen.\n\nThe encoder now functions as a simple dictionary lookup for each character. Encoding `ababa!` therefore produces the sequence 1, 2, 1, 2, 1, 0 in that order. Compare this with the earlier version: the input text has not changed, and we still produce one integer per character. What has changed is how we choose the vocabulary ordering and how we perform each lookup. Sorting ensures this example is reproducible for the same character set. However, it does not make the IDs universal across different datasets; adding another character can change the sorted ordering, so a trained model's vocabulary must be saved along with its IDs.",
+          "uncertainties": []
+        },
+        {
+          "heading": "Build the inverse and check the round trip",
+          "segment_ids": [
+            "s00004"
+          ],
+          "markdown": "To recover text, we invert the mapping. The integer-to-string dictionary maps zero to the exclamation mark, one to `a`, and two to `b`. For each input ID, we look up its character and then join the resulting characters with an empty separator. Using a space separator would silently introduce characters that were never in the source text.\n\nHere is the first useful invariant: `decode(encode(text))` must equal `text`. The terminal shows the encoded list followed by `ababa!`, and the assertion passes. This checks the composition of our encoder and decoder on the original example. It does not prove correctness for every possible string or ID, but it catches several common mistakes: mismatched dictionaries, reordered positions, and the wrong join separator. Keep this check beside the implementation as we change it. We now have a reversible representation for strings made entirely from the current vocabulary.",
+          "uncertainties": []
+        },
+        {
+          "heading": "Expose the boundary instead of hiding it",
+          "segment_ids": [
+            "s00005"
+          ],
+          "markdown": "Now try to encode a question mark. Our corpus never contained one, so the string-to-integer dictionary has no entry for it. The first dictionary encoder raises a `KeyError`. This is an expected boundary of the implementation, not evidence that the mapping for `ababa!` stopped working.\n\nA tempting response might be to map an unknown character to zero. In our vocabulary, however, zero already means the exclamation mark. That would make decoding a question mark return an exclamation mark, destroying the round-trip property without telling the caller what went wrong. We will not make that substitution. For this lesson, we will reject unknown characters explicitly and report which character was missing. A production tokenizer could choose a different policy, but that policy would need a deliberately designed representation. The terminal error is part of the lesson: it explains why the next code change is necessary.",
+          "uncertainties": []
+        },
+        {
+          "heading": "Improve the error while preserving the contract",
+          "segment_ids": [
+            "s00006"
+          ],
+          "markdown": "Replace the small encoder expression with a named function. It still visits input characters in order and returns the same list for valid text. The difference is the boundary check: before looking up a character, we test whether it belongs to the vocabulary. If not, we raise a `ValueError` that includes the character's representation.\n\nThe terminal now shows `ValueError: unknown character: '?'` when we attempt the same unsupported input. This is a clearer message for a caller than a raw dictionary `KeyError`. We have changed the failure behavior while preserving successful encodings. Run the original round-trip assertion again after replacing `encode`. It still passes. This is why we kept an invariant close to the code: the improvement to error handling should not accidentally change IDs, skip repeated characters, or return a partially encoded result. The function either returns the complete encoding or raises an exception.",
+          "uncertainties": []
+        },
+        {
+          "heading": "Read the sequence as positions, not categories",
+          "segment_ids": [
+            "s00007"
+          ],
+          "markdown": "Look at the six boxes in the diagram. The top row contains `a`, `b`, `a`, `b`, `a`, exclamation mark. The bottom row contains 1, 2, 1, 2, 1, 0. A vertical arrow joins each character to exactly one ID at the same position. The repeated `a` characters occupy three different sequence positions but share the same vocabulary ID.\n\nThis distinction matters when the sequence later becomes model input. The list preserves the order of occurrences. The vocabulary dictionary stores the identity mapping, not the whole text. A set of the token IDs would throw away both repetitions and ordering, so it could not be decoded back into the original string. We have also not added a start token, an end token, padding, or a batch dimension. The exclamation mark is ordinary data in our example; it has no special control meaning merely because its ID is zero.",
+          "uncertainties": []
+        },
+        {
+          "heading": "Leave with a small, working boundary",
+          "segment_ids": [
+            "s00008"
+          ],
+          "markdown": "Run the complete file from top to bottom. It prints the vocabulary, the encoded sequence, and the decoded text. The round-trip assertion passes. A separate deliberate call with a question mark raises the explicit error; keep that call outside the successful main path when you want the file to finish normally.\n\nWe now have three pieces that must stay together: an ordered vocabulary, an encoder that rejects unsupported characters, and a decoder using the inverse vocabulary. The example remains small enough that we can inspect every value manually. We have not trained a language model, compressed the data, or discovered relationships between characters. We have only established a reversible numeric representation with a clear failure boundary. That is a useful stopping point: the next stage can consume these IDs without confusing a representation bug with a modeling problem. Save the vocabulary whenever you save data or weights that depend on its IDs.",
+          "uncertainties": []
+        }
+      ]
+    },
+    "mode": "model",
+    "provider": "local",
+    "model": "qwen3.5-4b-64k:latest",
+    "warnings": [
+      "Written by a local model. Source coverage is checked; conceptual fidelity still requires review. No cloud API key was used."
+    ]
+  },
+  "report": {
+    "status": "needs_review",
+    "semanticFidelity": "not_verified",
+    "segmentCoverage": {
+      "covered": 8,
+      "total": 8
+    },
+    "chronologicalOrder": true,
+    "visualRecords": 10,
+    "codeStates": 6,
+    "terminalRecords": 3,
+    "missingFrameChecks": 8,
+    "captionGaps": [],
+    "proseToSourceRatio": 1.08,
+    "warnings": [
+      "8 suggested screen checks have no nearby supplied visual record. Important unspoken details may be missing."
+    ],
+    "limits": "Coverage counts source IDs, not teaching points. Supplied visuals and code are retained verbatim; their transcription and semantic accuracy are not independently verified. The whole video has not been converted."
+  },
+  "conversionScope": "one-chapter",
+  "createdAt": "2026-10-17T12:54:04.690Z",
+  "markdown": "# Establishing a Reversible Numeric Representation for Text\n\nSource: Build a reversible character tokenizer · Course Zero · original test lesson\n\nWindow: 00:00 (fixture time; no source video)–08:00 · AI-written draft · Needs review\n\nProvenance: Original eight-minute teaching fixture authored for this MVP. All timestamps simulate a lesson timeline. No Karpathy transcript, video frames, or narration are included.\n\n> Written by a local model. Source coverage is checked; conceptual fidelity still requires review. No cloud API key was used.\n\n> 8 suggested screen checks have no nearby supplied visual record. Important unspoken details may be missing.\n\n> ORIGINAL TEST FIXTURE. This is an authored eight-minute lesson, not a transcript of Karpathy or a recording. Times simulate a video timeline.\n\n## Start with something we can reverse\n\n00:00 (fixture time; no source video) · Source s00001\n\nA language model operates fundamentally on numbers, yet our initial training material arrives as text. Before constructing a model, we must establish a reversible mechanism to translate between these two representations. We will begin with a deliberately small corpus: the six-character string `ababa!`. Our objective is to convert each character into an integer and subsequently recover the exact original string from those integers. This exercise is not about predicting future text; it is purely a representation step.\n\nWe must keep three distinct quantities separate in our minds. First, the text has six specific positions. Second, it utilizes three distinct characters: `a`, `b`, and the exclamation mark. Third, each position will become one token, while the vocabulary will contain exactly one entry per distinct character. A repeated `a` must receive the same ID every time it appears. It is crucial to understand that these IDs are labels, not numerical measurements; assigning a larger number to `b` would not imply that `b` is more important than `a`.\n\n## The first version: discover the vocabulary\n\n01:00 (fixture time; no source video) · Source s00002\n\nLet us begin by creating a set, which automatically removes duplicates. Converting this set into a list provides us with a vocabulary we can index. The initial implementation uses `chars.index` to find the position of each character and stores those positions in a list. This approach is sufficient to encode our tiny text.\n\nObserve what the code on screen actually does: it searches the vocabulary again for every character, rather than preparing a lookup table once. There is also a reproducibility problem inherent in this method. We have not defined what order the vocabulary should use. Since a Python set does not promise a stable character ordering across different runs, the token IDs generated by this version cannot become a persistent file format. Do not memorize the particular IDs you happen to see; the same vocabulary ordering must be used consistently wherever we encode and decode. We will fix this ordering issue before building anything on top of these IDs.\n\n### Version 1 · vocabulary search\n\n01:05 (fixture time; no source video) · e0001 · code · Authored fixture code state\n\n```python\ntext = \"ababa!\"\nchars = list(set(text))\nencode = lambda s: [chars.index(c) for c in s]\nids = encode(text)\n# Set ordering is not a persistent vocabulary contract.\n```\n\n## Make the mapping deterministic\n\n02:00 (fixture time; no source video) · Source s00003\n\nWe now replace the vocabulary list with `sorted(set(text))`. For this specific corpus, the sorted list is: exclamation mark, then `a`, then `b`. Enumerating this list gives us a dictionary mapping each character to its integer ID: the exclamation mark maps to zero, `a` to one, and `b` to two. This is the mapping visible on screen.\n\nThe encoder now functions as a simple dictionary lookup for each character. Encoding `ababa!` therefore produces the sequence 1, 2, 1, 2, 1, 0 in that order. Compare this with the earlier version: the input text has not changed, and we still produce one integer per character. What has changed is how we choose the vocabulary ordering and how we perform each lookup. Sorting ensures this example is reproducible for the same character set. However, it does not make the IDs universal across different datasets; adding another character can change the sorted ordering, so a trained model's vocabulary must be saved along with its IDs.\n\n### Version 2 · deterministic lookup\n\n02:10 (fixture time; no source video) · e0002 · code · Authored fixture code state\n\n```python\ntext = \"ababa!\"\nchars = sorted(set(text))\nstoi = {ch: i for i, ch in enumerate(chars)}\nencode = lambda s: [stoi[c] for c in s]\nprint(chars)\nprint(encode(text))\n```\n\n### Vocabulary and token IDs\n\n02:30 (fixture time; no source video) · e0003 · terminal · Expected fixture output\n\n```text\n['!', 'a', 'b']\n[1, 2, 1, 2, 1, 0]\n```\n\n## Build the inverse and check the round trip\n\n03:00 (fixture time; no source video) · Source s00004\n\nTo recover text, we invert the mapping. The integer-to-string dictionary maps zero to the exclamation mark, one to `a`, and two to `b`. For each input ID, we look up its character and then join the resulting characters with an empty separator. Using a space separator would silently introduce characters that were never in the source text.\n\nHere is the first useful invariant: `decode(encode(text))` must equal `text`. The terminal shows the encoded list followed by `ababa!`, and the assertion passes. This checks the composition of our encoder and decoder on the original example. It does not prove correctness for every possible string or ID, but it catches several common mistakes: mismatched dictionaries, reordered positions, and the wrong join separator. Keep this check beside the implementation as we change it. We now have a reversible representation for strings made entirely from the current vocabulary.\n\n### Add the inverse mapping\n\n03:15 (fixture time; no source video) · e0004 · code · Authored fixture code addition\n\n```python\nitos = {i: ch for ch, i in stoi.items()}\ndecode = lambda ids: ''.join(itos[i] for i in ids)\nprint(decode(encode(text)))\nassert decode(encode(text)) == text\n```\n\n### Round trip\n\n03:40 (fixture time; no source video) · e0005 · terminal · Expected fixture output\n\n```text\nababa!\n# The assertion passes without printing anything.\n```\n\n## Expose the boundary instead of hiding it\n\n04:00 (fixture time; no source video) · Source s00005\n\nNow try to encode a question mark. Our corpus never contained one, so the string-to-integer dictionary has no entry for it. The first dictionary encoder raises a `KeyError`. This is an expected boundary of the implementation, not evidence that the mapping for `ababa!` stopped working.\n\nA tempting response might be to map an unknown character to zero. In our vocabulary, however, zero already means the exclamation mark. That would make decoding a question mark return an exclamation mark, destroying the round-trip property without telling the caller what went wrong. We will not make that substitution. For this lesson, we will reject unknown characters explicitly and report which character was missing. A production tokenizer could choose a different policy, but that policy would need a deliberately designed representation. The terminal error is part of the lesson: it explains why the next code change is necessary.\n\n### Deliberately test an unknown character\n\n04:15 (fixture time; no source video) · e0006 · code · Authored fixture demonstration; run separately\n\n```python\nencode(\"?\")\n# Raises KeyError: '?' with Version 2.\n```\n\n## Improve the error while preserving the contract\n\n05:00 (fixture time; no source video) · Source s00006\n\nReplace the small encoder expression with a named function. It still visits input characters in order and returns the same list for valid text. The difference is the boundary check: before looking up a character, we test whether it belongs to the vocabulary. If not, we raise a `ValueError` that includes the character's representation.\n\nThe terminal now shows `ValueError: unknown character: '?'` when we attempt the same unsupported input. This is a clearer message for a caller than a raw dictionary `KeyError`. We have changed the failure behavior while preserving successful encodings. Run the original round-trip assertion again after replacing `encode`. It still passes. This is why we kept an invariant close to the code: the improvement to error handling should not accidentally change IDs, skip repeated characters, or return a partially encoded result. The function either returns the complete encoding or raises an exception.\n\n### Version 3 · an explicit failure boundary\n\n05:10 (fixture time; no source video) · e0007 · code · Authored fixture replacement for encode\n\n```python\ndef encode(s):\n    ids = []\n    for c in s:\n        if c not in stoi:\n            raise ValueError(f\"unknown character: {c!r}\")\n        ids.append(stoi[c])\n    return ids\n\nassert decode(encode(text)) == text\n```\n\n### The improved error\n\n05:30 (fixture time; no source video) · e0008 · terminal · Expected fixture exception message; traceback omitted\n\n```text\nValueError: unknown character: '?'\n```\n\n## Read the sequence as positions, not categories\n\n06:00 (fixture time; no source video) · Source s00007\n\nLook at the six boxes in the diagram. The top row contains `a`, `b`, `a`, `b`, `a`, exclamation mark. The bottom row contains 1, 2, 1, 2, 1, 0. A vertical arrow joins each character to exactly one ID at the same position. The repeated `a` characters occupy three different sequence positions but share the same vocabulary ID.\n\nThis distinction matters when the sequence later becomes model input. The list preserves the order of occurrences. The vocabulary dictionary stores the identity mapping, not the whole text. A set of the token IDs would throw away both repetitions and ordering, so it could not be decoded back into the original string. We have also not added a start token, an end token, padding, or a batch dimension. The exclamation mark is ordinary data in our example; it has no special control meaning merely because its ID is zero.\n\n### Six positions, three vocabulary entries\n\n06:05 (fixture time; no source video) · e0009 · diagram · Authored fixture diagram transcription\n\n> Characters:   a   b   a   b   a   !\n>               ↓   ↓   ↓   ↓   ↓   ↓\n> Token IDs:    1   2   1   2   1   0\n> \n> Each vertical arrow preserves position. Repeated characters share an ID.\n\n## Leave with a small, working boundary\n\n07:00 (fixture time; no source video) · Source s00008\n\nRun the complete file from top to bottom. It prints the vocabulary, the encoded sequence, and the decoded text. The round-trip assertion passes. A separate deliberate call with a question mark raises the explicit error; keep that call outside the successful main path when you want the file to finish normally.\n\nWe now have three pieces that must stay together: an ordered vocabulary, an encoder that rejects unsupported characters, and a decoder using the inverse vocabulary. The example remains small enough that we can inspect every value manually. We have not trained a language model, compressed the data, or discovered relationships between characters. We have only established a reversible numeric representation with a clear failure boundary. That is a useful stopping point: the next stage can consume these IDs without confusing a representation bug with a modeling problem. Save the vocabulary whenever you save data or weights that depend on its IDs.\n\n### Complete runnable lesson\n\n07:20 (fixture time; no source video) · e0010 · code · Authored fixture final state; earlier states remain above\n\n```python\ntext = \"ababa!\"\nchars = sorted(set(text))\nstoi = {ch: i for i, ch in enumerate(chars)}\nitos = {i: ch for ch, i in stoi.items()}\n\ndef encode(s):\n    ids = []\n    for c in s:\n        if c not in stoi:\n            raise ValueError(f\"unknown character: {c!r}\")\n        ids.append(stoi[c])\n    return ids\n\ndef decode(ids):\n    return ''.join(itos[i] for i in ids)\n\nprint(chars)\nprint(encode(text))\nprint(decode(encode(text)))\nassert decode(encode(text)) == text\n# Run encode(\"?\") separately to demonstrate the error.\n```\n\n## Source wording for comparison\n\nThe complete supplied transcript is retained below for auditing the AI-written prose.\n\n### s00001 · 00:00 (fixture time; no source video)\n\n> A language model works with numbers, but our training material starts as text. Before building a model, we need a reversible way to move between those two representations. We will use a deliberately small corpus: the six-character string ababa!. Our goal is to turn each character into an integer and then recover exactly the original string. We are not predicting anything yet. This is only a representation step.\n> \n> Keep three different quantities separate. The text has six positions. It uses three distinct characters: a, b, and the exclamation mark. Each position will become one token, while the vocabulary will contain one entry per distinct character. A repeated a must receive the same ID every time. These IDs are labels, not numerical measurements: assigning a larger number to b would not make b more important than a.\n\n### s00002 · 01:00 (fixture time; no source video)\n\n> Let us start with a set, which removes duplicates. Converting the set into a list gives us a vocabulary we can index. The first version uses chars.index to find each character's position and stores those positions in a list. This is enough to encode our tiny text. Notice what the code on screen actually does: it searches the vocabulary again for every character, rather than preparing a lookup table once.\n> \n> There is also a reproducibility problem. We have not said what order the vocabulary should use. A Python set does not promise a stable character ordering across runs, so token IDs from this version should not become a persistent file format. Do not memorize the particular IDs you happen to see. The same vocabulary ordering must be used wherever we encode and decode. We will fix that ordering before building anything on top of these IDs.\n\n### s00003 · 02:00 (fixture time; no source video)\n\n> We now replace the vocabulary list with sorted(set(text)). For this corpus, the sorted list is exclamation mark, a, then b. Enumerating that list gives us a dictionary from each character to its integer ID: exclamation mark maps to zero, a to one, and b to two. This is the mapping visible on screen.\n> \n> The encoder becomes a dictionary lookup for each character. Encoding ababa! therefore produces 1, 2, 1, 2, 1, 0, in that order. Compare this with the earlier version: the input has not changed, and we still produce one integer per character. What changed is how we choose the vocabulary ordering and how we perform each lookup. Sorting makes this example reproducible for the same character set. It does not make the IDs universal across datasets: adding another character can change the sorted ordering, so a trained model's vocabulary must be saved with it.\n\n### s00004 · 03:00 (fixture time; no source video)\n\n> To recover text, invert the mapping. The integer-to-string dictionary maps zero to the exclamation mark, one to a, and two to b. For each input ID, look up its character, then join the resulting characters with an empty separator. A space separator would silently introduce characters that were never in the source.\n> \n> Here is the first useful invariant: decode(encode(text)) must equal text. The terminal shows the encoded list followed by ababa!, and the assertion passes. This checks the composition of our encoder and decoder on the original example. It does not prove correctness for every possible string or ID, but it catches several common mistakes: mismatched dictionaries, reordered positions, and the wrong join separator. Keep the check beside the implementation as we change it. We have a reversible representation for strings made entirely from the current vocabulary.\n\n### s00005 · 04:00 (fixture time; no source video)\n\n> Now try to encode a question mark. Our corpus never contained one, so the string-to-integer dictionary has no entry for it. The first dictionary encoder raises a KeyError. This is an expected boundary of the implementation, not evidence that the mapping for ababa! stopped working.\n> \n> A tempting response is to map an unknown character to zero. In our vocabulary, however, zero already means exclamation mark. That would make decoding a question mark return an exclamation mark, destroying the round-trip property without telling the caller. We will not make that substitution. For this lesson, we will reject unknown characters explicitly and report which character was missing. A production tokenizer could choose a different policy, but that policy would need a deliberately designed representation. The terminal error is part of the lesson: it explains why the next code change is necessary.\n\n### s00006 · 05:00 (fixture time; no source video)\n\n> Replace the small encoder expression with a named function. It still visits input characters in order and returns the same list for valid text. The difference is the boundary check: before looking up a character, test whether it belongs to the vocabulary. If not, raise a ValueError that includes the character's representation.\n> \n> The terminal now shows ValueError: unknown character: '?' when we attempt the same unsupported input. This is a clearer message for a caller than a raw dictionary KeyError. We have changed the failure behavior, while preserving successful encodings. Run the original round-trip assertion again after replacing encode. It still passes. This is why we kept an invariant close to the code: the improvement to error handling should not accidentally change IDs, skip repeated characters, or return a partially encoded result. The function either returns the complete encoding or raises an exception.\n\n### s00007 · 06:00 (fixture time; no source video)\n\n> Look at the six boxes in the diagram. The top row contains a, b, a, b, a, exclamation mark. The bottom row contains 1, 2, 1, 2, 1, 0. A vertical arrow joins each character to exactly one ID at the same position. The repeated a characters occupy three different sequence positions but share the same vocabulary ID.\n> \n> This distinction matters when the sequence later becomes model input. The list preserves the order of occurrences. The vocabulary dictionary stores the identity mapping, not the whole text. A set of the token IDs would throw away both repetitions and ordering, so it could not be decoded back into the original string. We also have not added a start token, an end token, padding, or a batch dimension. The exclamation mark is ordinary data in our example; it has no special control meaning merely because its ID is zero.\n\n### s00008 · 07:00 (fixture time; no source video)\n\n> Run the complete file from top to bottom. It prints the vocabulary, the encoded sequence, and the decoded text. The round-trip assertion passes. A separate deliberate call with a question mark raises the explicit error; keep that call outside the successful main path when you want the file to finish normally.\n> \n> We now have three pieces that must stay together: an ordered vocabulary, an encoder that rejects unsupported characters, and a decoder using the inverse vocabulary. The example remains small enough that we can inspect every value manually. We have not trained a language model, compressed the data, or discovered relationships between characters. We have only established a reversible numeric representation with a clear failure boundary. That is a useful stopping point: the next stage can consume these IDs without confusing a representation bug with a modeling problem. Save the vocabulary whenever you save data or weights that depend on its IDs.\n\n## Fidelity report\n\n- Source ID coverage: 8/8\n- Chronological source assignment: passed\n- Exact supplied code states: 6\n- Supplied terminal records: 3\n- Semantic fidelity: NOT VERIFIED\n\nCoverage counts source IDs, not teaching points. Supplied visuals and code are retained verbatim; their transcription and semantic accuracy are not independently verified. The whole video has not been converted.\n"
+}

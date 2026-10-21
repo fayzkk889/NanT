@@ -1,0 +1,24 @@
+{
+  "sourceType": "local",
+  "title": "Original oral test: sorting and the missing return value",
+  "rightsConfirmed": true,
+  "provider": "local",
+  "useModel": true,
+  "duration": 300,
+  "start": 0,
+  "transcript": [
+    {"start": 0, "end": 50, "text": "okay this is an original user test, not narration from an online course. we have this list, three one two, right, and what we want is the ordered numbers one two three. but also i want to keep the original order around, because another part of the program uses it. so there are two things to check, the result and the input after we run it."},
+    {"start": 50, "end": 100, "text": "so let me try result equals values dot sort. print result, and ah, it says None. but look at values now, it is one two three. so the call did something. it sorted the same list we already had. the thing we assigned to result is the return value of the method, and that return value is None. don't read None as an empty sorted list."},
+    {"start": 100, "end": 150, "text": "i could just use values after that, but wait, that loses the original order and i said we needed the original order too. so fixing the variable name is not really fixing the requirement. we need an operation that produces another list. and reset values first to three one two, otherwise the first experiment has already changed our input."},
+    {"start": 150, "end": 200, "text": "now result equals sorted values, with parentheses, not the method on the list. print the result and print values. okay the new result is one two three, while values is still three one two. so for these numbers that is the behavior we were after. the two operations sound similar but have different contracts."},
+    {"start": 200, "end": 250, "text": "one check for each requirement. result should equal the ordered list one two three. values should still equal three one two. keep both assertions. if i only tested result, then a later change could modify the original input and the first test would not tell me. i'm not talking about copying every object inside any arbitrary nested list here, just this example with three numbers."},
+    {"start": 250, "end": 300, "text": "so the final version initializes the original list, calls sorted to get another list, and checks both lists. keep the None example in the written explanation because that is how we found the problem. do not claim that sort is broken. it did an in place change and returned None. we chose sorted because our particular requirement needs a separate result and the original order."}
+  ],
+  "evidence": [
+    {"at": 55, "kind": "code", "title": "The initial attempt", "language": "python", "content": "values = [3, 1, 2]\nresult = values.sort()\nprint(result)\nprint(values)"},
+    {"at": 75, "kind": "terminal", "title": "The surprising output", "content": "None\n[1, 2, 3]"},
+    {"at": 160, "kind": "code", "title": "The corrected operation", "language": "python", "content": "values = [3, 1, 2]\nresult = sorted(values)\nprint(result)\nprint(values)"},
+    {"at": 180, "kind": "terminal", "title": "Both requirements hold", "content": "[1, 2, 3]\n[3, 1, 2]"},
+    {"at": 265, "kind": "code", "title": "The final checked version", "language": "python", "content": "values = [3, 1, 2]\nresult = sorted(values)\nassert result == [1, 2, 3]\nassert values == [3, 1, 2]"}
+  ]
+}
