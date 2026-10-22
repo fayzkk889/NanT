@@ -18,7 +18,7 @@ test('HTTP app serves UI, completes a demo, exposes honest blocked/error states 
     throw new Error('Job did not settle');
   }
   try {
-    const home = await fetch(base); assert.equal(home.status, 200); assert.match(await home.text(), /From your screen/);
+    const home = await fetch(base); assert.equal(home.status, 200); assert.match(await home.text(), /NanT/);
     assert.match(home.headers.get('Content-Security-Policy'), /object-src 'none'/);
     const appModule=await (await fetch(`${base}/app.js`)).text();
     for(const dependency of appModule.matchAll(/from\s+['"]([^'"]+)['"]/g)){

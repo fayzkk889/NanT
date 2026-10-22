@@ -370,3 +370,5 @@ refreshHealth();setInterval(refreshHealth,15000);
 applyStyle(localStorage.getItem('course-zero-pdf-style') || 'textbook'); refreshHistory();
 const savedJob = sessionStorage.getItem('course-zero-job') || sessionStorage.getItem('course-zero-last-job') || localStorage.getItem('course-zero-last-job');
 if (savedJob) { sessionStorage.setItem('course-zero-last-job',savedJob); jobId = savedJob; setBusy(true); poll(savedJob).catch(fail); }
+
+document.getElementById('hero-demo').addEventListener('click',()=>{document.getElementById('demo').click();document.getElementById('study-desk').scrollIntoView({behavior:'smooth'});});

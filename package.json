@@ -12,11 +12,12 @@
     "test": "node --test",
     "acceptance": "node scripts/acceptance-smoke.js",
     "setup:media": "node scripts/setup-media.js",
-    "check": "node --check server.js && node --check public/app.js",
+    "check": "node --check server.js && node --check public/app.js && node --check public/cloud-app.js && node --check api/cloud.js && node --check src/cloud-model.js && node --check src/cloud-quota.js",
     "sample": "node scripts/export-sample.js",
     "pdfs": "node scripts/export-pdfs.js",
     "sample:local": "node scripts/export-pdfs.js --local",
-    "setup:sources": "node scripts/setup-sources.js"
+    "setup:sources": "node scripts/setup-sources.js",
+    "build": "node scripts/build-web.js"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "1.1.1",

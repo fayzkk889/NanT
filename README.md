@@ -1,6 +1,10 @@
 # NanT — not an average notetaker
 
-A local, open-source tool for turning programming tutorial videos into written course chapters with ordered explanations, code screens, timestamp links and styled PDFs.
+[Live web preview](https://nant-sepia.vercel.app) · [Free hosting setup](DEPLOYMENT.md)
+
+An open-source tool for turning programming tutorial videos into written course chapters with ordered explanations, code screens, timestamp links and styled PDFs.
+
+NanT now also includes a Vercel web edition with an original notebook-inspired identity. Hosted conversion uses the project's shared free-tier model connection once configured; visitors never supply API keys. [Hosting and free-tier setup](DEPLOYMENT.md).
 
 ## Start
 
@@ -27,3 +31,5 @@ The source archive excludes credentials, recordings, private jobs, model weights
 `npm test` runs fixture, mock and local HTTP regression tests. `npm run check` checks JavaScript syntax. `npm run acceptance` runs live conversions of unfamiliar course URLs against the running app. Live source availability and local hardware affect conversion time.
 
 A complete draft is reviewable output, not independently certified fidelity. Important code and concepts must be checked against the retained source images. See [current acceptance results](USER-TEST-REPORT.md); older reports are retained as history.
+
+The hosted path is tested separately with mocked provider responses. It does not inherit the local model's real-video acceptance results. Live cloud conversion must be tested with the operator's configured free-tier key before it is advertised as available.

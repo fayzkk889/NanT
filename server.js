@@ -19,6 +19,9 @@ import {renderMarkdown} from './src/markdown.js';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const fixture = JSON.parse(await readFile(path.join(root, 'fixtures/original-lesson.json'), 'utf8'));
 const staticFiles = new Map([
+  ['/brand.css', ['public/brand.css', 'text/css; charset=utf-8']],
+  ['/logo.svg', ['public/logo.svg', 'image/svg+xml']],
+  ['/boot.js', ['public/boot.js', 'text/javascript; charset=utf-8']],
   ['/', ['public/index.html', 'text/html; charset=utf-8']],
   ['/app.js', ['public/app.js', 'text/javascript; charset=utf-8']],
   ['/style.css', ['public/style.css', 'text/css; charset=utf-8']],
