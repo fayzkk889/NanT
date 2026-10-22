@@ -1,11 +1,12 @@
 import {renderMarkdown} from './markdown-view.js';
-import {chapterParts,formatTime,readSeconds,cleanLessonMarkdown} from './cloud-course.js';
+import {chapterParts,formatTime,readSeconds,cleanLessonMarkdown,writingBatches,applyWritingBatch} from './cloud-course.js';
+import {cloudRequest} from './cloud-request.js';
 const $=id=>document.getElementById(id);
 let current=null,busy=false,controller=null,style='textbook',config=null,evidence=[],checkpoint=null,history=[];
 const node=(tag,text,className)=>{const el=document.createElement(tag);if(text!=null)el.textContent=text;if(className)el.className=className;return el;};
 function status(message,good=false){$('status').textContent=message;$('status').className=`status${good?' success':''}`;}
 function download(name,data,type){const url=URL.createObjectURL(new Blob([data],{type})),a=node('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-async function call(action,body={},signal){const response=await fetch('/api/cloud',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,...body}),signal});if(!response.ok){const data=await response.json().catch(()=>({}));throw new Error(data.error||'This step could not finish. Try again in a moment.');}return action==='pdf'?response.arrayBuffer():response.json();}
+async function call(action,body={},signal){return cloudRequest(action,body,{signal,onPause:seconds=>status(`Taking a ${seconds}-second breather to keep the service free. Your progress is saved; writing will continue automatically.`)});}
 const dbPromise=new Promise((resolve,reject)=>{const open=indexedDB.open('nant-study-desk',1);open.onupgradeneeded=()=>open.result.createObjectStore('saved');open.onsuccess=()=>resolve(open.result);open.onerror=()=>reject(open.error);}).catch(()=>null);
 async function storage(method,key,value){const db=await dbPromise;if(!db)return null;return new Promise((resolve,reject)=>{const tx=db.transaction('saved',method==='get'?'readonly':'readwrite'),store=tx.objectStore('saved'),request=method==='get'?store.get(key):store.put(value,key);let result;request.onsuccess=()=>{result=request.result;};tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(tx.error);}).catch(()=>{status('Browser storage is full or unavailable. Keep this tab open and export completed work.');return null;});}
 function setBusy(value){busy=value;document.querySelectorAll('#source-form input,#source-form textarea,#source-form select,#convert,#demo,#hero-demo,#publisher-example,.history-item,#open-chapter').forEach(el=>el.disabled=value);$('cancel-job').classList.toggle('hidden',!value);$('cancel-job').disabled=!value;$('convert').textContent=value?'Connecting the dots…':'Write this chapter ↗';$('export-pdf').disabled=value||!current;$('retry-job').classList.add('hidden');}
@@ -47,11 +48,13 @@ async function convert(){
         else part=structuredClone(windows[i]);
         const offset=checkpoint.parts.reduce((n,p)=>n+p.segments.length,0);part.segments=part.segments.map((s,j)=>({...s,id:`s${String(offset+j+1).padStart(5,'0')}`}));checkpoint.parts[i]=part;await storage('put','checkpoint',checkpoint);
       }
-      if(!part.writing){phase('Writing the explanation',i+1,windows.length);status(`Writing part ${i+1} of ${windows.length}, keeping every acquired source passage in order.`);
-        if(input.useModel){const response=await call('write',{segments:part.segments,evidence:part.evidence},controller.signal);part.writing=response.writing;updateUsage(response.usage);}
-        else part.writing={draft:{title:input.title||'A source-preserving lesson',sections:part.segments.map(s=>({heading:s.heading||'Original explanation',segment_ids:[s.id],markdown:s.text,uncertainties:[]}))},retained:[]};
-        await storage('put','checkpoint',checkpoint);
-      }
+    }
+    const batches=writingBatches(checkpoint.parts);
+    for(let index=0;index<batches.length;index++){
+      controller.signal.throwIfAborted();const indices=batches[index],parts=indices.map(i=>checkpoint.parts[i]),segments=parts.flatMap(p=>p.segments),visuals=parts.flatMap(p=>p.evidence);
+      phase('Writing the explanation',index+1,batches.length);status(`Writing your lesson, keeping every acquired explanation in order. Completed source reads are saved.`);
+      let writing;if(input.useModel){const response=await call('write',{segments,evidence:visuals},controller.signal);writing=response.writing;updateUsage(response.usage);}else writing={draft:{title:input.title||'A source-preserving lesson',sections:segments.map(s=>({heading:s.heading||'Original explanation',segment_ids:[s.id],markdown:s.text,uncertainties:[]}))},retained:[]};
+      applyWritingBatch(checkpoint.parts,indices,writing);await storage('put','checkpoint',checkpoint);
     }
     phase('Checking source coverage',windows.length,windows.length);const result=await call('finalize',{...input,transcript:undefined,evidence:undefined,parts:checkpoint.parts},controller.signal);controller.signal.throwIfAborted();await saveResult(result);showResult(result);checkpoint=null;await storage('put','checkpoint',null);status('Chapter ready. Give the code and explanations a closer read, then make your PDF.',true);
   }catch(error){status(error.name==='AbortError'?'Stopped. Your completed steps are saved. Choose Resume to continue.':error.message);$('retry-job').classList.remove('hidden');}

@@ -4,7 +4,7 @@
 
 An open-source tool for turning programming tutorial videos into written course chapters with ordered explanations, code screens, timestamp links and styled PDFs.
 
-NanT now also includes a Vercel web edition with an original notebook-inspired identity. Hosted conversion uses the project's shared free-tier model connection once configured; visitors never supply API keys. [Hosting and free-tier setup](DEPLOYMENT.md).
+NanT also includes a live Vercel web edition with an original notebook-inspired identity. Hosted conversion uses the project's shared free-tier Gemini connection; visitors never supply API keys. Start with one 5–10-minute chapter, then download a styled PDF. Shared daily allowances apply. [Hosting and free-tier setup](DEPLOYMENT.md).
 
 ## Start
 
@@ -32,4 +32,4 @@ The source archive excludes credentials, recordings, private jobs, model weights
 
 A complete draft is reviewable output, not independently certified fidelity. Important code and concepts must be checked against the retained source images. See [current acceptance results](USER-TEST-REPORT.md); older reports are retained as history.
 
-The hosted path is tested separately with mocked provider responses. It does not inherit the local model's real-video acceptance results. Live cloud conversion must be tested with the operator's configured free-tier key before it is advertised as available.
+The hosted path is tested separately: a real five-minute Karpathy chapter completed through the public service and exported as a six-page PDF on 22 October 2026. It retained 19 acquired speech passages and 10 typed visual records; 15 passages used source wording after rewrite validation failed. Source completeness and semantic accuracy remain unmeasured. See [live deployment checks and limitations](DEPLOYMENT.md#deployment-check--22-october-2026). Hosted results do not inherit the local model's acceptance results.

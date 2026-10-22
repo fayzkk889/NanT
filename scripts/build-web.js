@@ -2,7 +2,7 @@ import {mkdir,copyFile,readFile,writeFile} from 'node:fs/promises';
 import {resolve,dirname} from 'node:path';
 const root=resolve(import.meta.dirname,'..'),out=resolve(root,'dist');
 // Explicit public allowlist: never copy .env, local jobs, recordings or model files.
-const files=['index.html','style.css','brand.css','logo.svg','boot.js','cloud-app.js','cloud-course.js','markdown-view.js','course-bundle.js'];
+const files=['index.html','style.css','brand.css','logo.svg','boot.js','cloud-app.js','cloud-course.js','cloud-request.js','markdown-view.js','course-bundle.js'];
 await mkdir(out,{recursive:true});
 for(const file of files)await copyFile(resolve(root,'public',file),resolve(out,file));
 const index=await readFile(resolve(out,'index.html'),'utf8');await writeFile(resolve(out,'index.html'),index.replace('data-runtime="local"','data-runtime="hosted"'));
