@@ -7,6 +7,7 @@ import {validateDraft} from '../src/generation.js';
 import {restoreChapter} from '../src/restore.js';
 import {createChapterPDF} from '../src/pdf.js';
 import {readFile} from 'node:fs/promises';
+import {createCloudCapacity} from '../src/cloud-capacity.js';
 
 const MAX_BODY=1_500_000;
 async function bodyJSON(req){
@@ -16,12 +17,13 @@ async function bodyJSON(req){
   if(typeof body==='string'||Buffer.isBuffer(body)){if(Buffer.byteLength(body)>MAX_BODY)throw Object.assign(new Error('This chapter is too large for the online app.'),{status:413});try{body=JSON.parse(body);}catch{throw Object.assign(new Error('The request JSON could not be read.'),{status:400});}}
   if(!body||typeof body!=='object'||Array.isArray(body)||Buffer.byteLength(JSON.stringify(body))>MAX_BODY)throw Object.assign(new Error('Supply a chapter request under 1.5 MB.'),{status:400});return body;
 }
-export function createCloudHandler({env=process.env,fetcher=fetch,reserve=reserveCloudRequest}={}){
+export function createCloudHandler({env=process.env,fetcher=fetch,reserve=reserveCloudRequest,capacity}={}){
+  const sharedCapacity=capacity??(quotaConfigured(env)?createCloudCapacity({env,fetcher}):null);
   return async function handler(req,res){
     res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
     const send=(status,data)=>{res.statusCode=status;res.setHeader('Content-Type','application/json; charset=utf-8');res.end(JSON.stringify(data));};
     try{
-      if(req.method==='GET'){const providers=cloudProviders(env),quota=quotaConfigured(env);return send(200,{mode:'hosted',ready:providers.writer&&quota,video:providers.video&&quota,transcript:providers.writer&&quota,limits:dailyLimits(env),message:providers.writer&&quota?'Free shared connection. No account or API key needed.':'Free conversion is being connected. Explore the working sample and PDF exports.'});}
+      if(req.method==='GET'){const providers=cloudProviders(env),quota=quotaConfigured(env);return send(200,{mode:'hosted',ready:providers.writer&&quota,video:providers.video&&quota,transcript:providers.writer&&quota,connections:{gemini:providers.video,openrouter:Boolean(env.OPENROUTER_API_KEY)},limits:dailyLimits(env),message:providers.writer&&quota?'Free shared connection. No account or API key needed.':'Free conversion is being connected. Explore the working sample and PDF exports.'});}
       if(req.method!=='POST')return send(405,{error:'Use GET or POST.'});
       const origin=req.headers.origin;if(origin){let originHost;try{originHost=new URL(origin).host;}catch{}if(originHost!==req.headers.host)return send(403,{error:'Open NanT directly to start a conversion.'});}
       const input=await bodyJSON(req);
@@ -43,9 +45,16 @@ export function createCloudHandler({env=process.env,fetcher=fetch,reserve=reserv
         if(!cloudProviders(env).writer)return send(503,{error:'The free writing connection is being connected. Try the sample.'});
         if(!Array.isArray(input.segments)||!input.segments.length||input.segments.length>150||JSON.stringify({segments:input.segments,evidence:input.evidence}).length>90000)return send(400,{error:'Supply one bounded source part.'});
       }
-      const ip=req.headers['x-vercel-forwarded-for']||req.headers['x-real-ip']||req.socket?.remoteAddress||'unknown',usage=await reserve(ip,{env,fetcher});
-      const options={env,fetcher,signal:AbortSignal.timeout(210000)};
-      if(input.action==='extract'){const link=parseYouTubeURL(input.url);return send(200,{part:await extractVideo(link.url,input.start,input.end,options),usage});}
+      const ip=req.headers['x-vercel-forwarded-for']||req.headers['x-real-ip']||req.socket?.remoteAddress||'unknown';let usage;
+      const options={env,fetcher,signal:AbortSignal.timeout(210000),capacity:sharedCapacity,beforeAttempt:async()=>{usage=await reserve(ip,{env,fetcher});}};
+      if(input.action==='extract'){
+        const link=parseYouTubeURL(input.url),saved=await sharedCapacity?.source(link.url,input.start,input.end);
+        if(saved)return send(200,{part:saved,reused:true});
+        const part=await extractVideo(link.url,input.start,input.end,options);
+        // A cache write failure must not discard a completed provider response.
+        try{await sharedCapacity?.saveSource(link.url,input.start,input.end,part);}catch{}
+        return send(200,{part,usage,reused:false});
+      }
       return send(200,{writing:await writeCloudPart(input.segments,input.evidence||[],options),usage});
     }catch(error){const status=error.status||error.statusCode||500;if(error.retryAfter)res.setHeader('Retry-After',String(error.retryAfter));return send(status,{error:status>=500&&!error.status?'This step could not finish. Your completed steps are saved; try again later.':error.message});}
   };

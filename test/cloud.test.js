@@ -7,6 +7,8 @@ import {reserveCloudRequest} from '../src/cloud-quota.js';
 import {assembleCloudCourse} from '../src/cloud-course.js';
 import {chapterParts,cleanLessonMarkdown,writingBatches,applyWritingBatch} from '../public/cloud-course.js';
 import {cloudRequest,cancellableDelay} from '../public/cloud-request.js';
+import {freeRoutes,providerError,withFreeFallback} from '../src/cloud-routing.js';
+import {createCloudCapacity,pacificResetSeconds} from '../src/cloud-capacity.js';
 const env={GEMINI_API_KEY:'test-not-a-real-key',GEMINI_FREE_TIER_CONFIRMED:'true',UPSTASH_REDIS_REST_URL:'https://example.upstash.io',UPSTASH_REDIS_REST_TOKEN:'test-quota-secret'};
 const response=data=>({ok:true,json:async()=>data});
 const modelResponse=data=>response({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(data)}]}}]});
@@ -18,7 +20,7 @@ test('Public config never exposes keys and shared writing stays off without pers
   await assert.rejects(reserveCloudRequest('127.0.0.1',{env:{},fetcher:()=>{throw new Error('unexpected request');}}),/being connected/);
 });
 test('Quota reservation is atomic, persistent and hashes the visitor connection',async()=>{
-  let command;const usage=await reserveCloudRequest('203.0.113.12',{env,now:new Date('2026-10-22T12:00:00Z'),fetcher:async(_url,options)=>{command=JSON.parse(options.body);return response({result:['ok',3,2]});}});
+  let command;const usage=await reserveCloudRequest('203.0.113.12',{env:{...env,CLOUD_VISITOR_DAILY_REQUESTS:'20'},now:new Date('2026-10-22T12:00:00Z'),fetcher:async(_url,options)=>{command=JSON.parse(options.body);return response({result:['ok',3,2]});}});
   assert.equal(command[0],'EVAL');assert.match(command[1],/INCR/);assert.equal(command[2],'3');assert.ok(command.some(v=>String(v).includes('2026-10-22')));assert.doesNotMatch(JSON.stringify(command),/203\.0\.113/);assert.equal(usage.visitorRemaining,18);
   await assert.rejects(reserveCloudRequest('ip',{env,fetcher:async()=>response({result:['global',80,3]})}),e=>e.status===429&&e.retryAfter>0);
   await assert.rejects(reserveCloudRequest('ip',{env,fetcher:async()=>({ok:false})}),e=>e.status===503);
@@ -32,10 +34,12 @@ test('Gemini receives a clipped public YouTube URL and no unbounded video reques
   assert.throws(()=>validateExtract({...data,segments:[{...cue,start:0,end:25}]},480,570),/inconsistent timestamps/);
   assert.equal(validateExtract({...data,segments:[{...cue,start:478,end:505}]},480,570).segments[0].start,478);
   assert.throws(()=>validateExtract({...data,uncertainties:['The audio explanation is missing.']},480,570),/not accepted/);
+  assert.equal(validateExtract({...data,evidence:[{...data.evidence[0],at:573}]},480,570).evidence[0].at,573);
+  assert.throws(()=>validateExtract({...data,evidence:[{...data.evidence[0],at:574}]},480,570),/invalid visual/);
 });
 test('Free model adapters reject paid choices and never retry a quota error on a paid model',async()=>{
   await assert.rejects(writeCloudPart([cue],[],{env:{...env,GEMINI_WRITER_MODEL:'paid-model'},fetcher:()=>{throw new Error('must not run');}}),/free-tier allowlist/);
-  let calls=0;await assert.rejects(writeCloudPart([cue],[],{env,fetcher:async()=>{calls++;return {ok:false,status:429};}}),e=>e.status===429);assert.equal(calls,1);
+  let calls=0;const recovered=await writeCloudPart([cue],[],{env,fetcher:async()=>{calls++;return {ok:false,status:429};}});assert.equal(calls,1);assert.equal(recovered.provider,'source');assert.equal(recovered.draft.sections[0].markdown,cue.text);
   const result=await writeCloudPart([cue],[],{env:{OPENROUTER_API_KEY:'test'},fetcher:async(url,options)=>{const body=JSON.parse(options.body);assert.equal(body.model,'openrouter/free');assert.equal(body.provider.max_price.prompt,0);assert.equal(body.models,undefined);return response({choices:[{finish_reason:'stop',message:{content:JSON.stringify(draft)}}]});}});assert.equal(result.provider,'openrouter');
 });
 test('A missing explanation in cloud writing retains every original passage with an explicit label',async()=>{
@@ -79,4 +83,72 @@ test('Batched writing saves free requests without rewriting completed parts or d
   const sections=parts.flatMap(p=>p.segments).map(s=>({...draft.sections[0],segment_ids:[s.id]}));applyWritingBatch(parts,[0,1,2,3],{draft:{title:'Lesson',sections},retained:['s00002']});
   assert.deepEqual(parts.flatMap(p=>p.writing.draft.sections.flatMap(s=>s.segment_ids)),['s00001','s00002','s00003','s00004']);assert.deepEqual(parts[1].writing.retained,['s00002']);
   delete parts[0].writing;delete parts[2].writing;assert.deepEqual(writingBatches(parts),[[0],[2]]);
+});
+
+test('Daily visitor caps are disabled by default while shared and short-term protection remain',async()=>{
+  let command;const usage=await reserveCloudRequest('campus-wifi',{env,fetcher:async(_url,options)=>{command=JSON.parse(options.body);return response({result:['ok',30,25]});}});
+  assert.equal(command.at(-1),'0');assert.match(command[1],/tonumber\(ARGV\[2\]\)>0/);assert.match(command[1],/minute>=6/);assert.equal(usage.visitorRemaining,null);assert.equal(usage.sharedRemaining,50);
+});
+
+test('Video quota failover keeps clipped high-resolution source input on another free Gemini model',async()=>{
+  const calls=[],reservations=[];const data={title:'Course',author:'Teacher',segments:[{...cue,start:480,end:505}],evidence:[],uncertainties:[]};
+  const part=await extractVideo('https://www.youtube.com/watch?v=kCc8FmEb1nY',480,570,{env,beforeAttempt:async r=>reservations.push(r.model),fetcher:async(url,options)=>{calls.push(url);const body=JSON.parse(options.body);assert.equal(body.contents[0].parts[0].videoMetadata.startOffset,'478s');assert.equal(body.generationConfig.mediaResolution,'MEDIA_RESOLUTION_HIGH');return calls.length===1?{ok:false,status:429,json:async()=>({error:{message:'Requests per day exhausted'}})}:modelResponse(data);}});
+  assert.deepEqual(reservations,['gemini-3.6-flash','gemini-3.8-flash']);assert.equal(calls.length,2);assert.equal(part.model,'gemini-3.8-flash');
+});
+
+test('Gemini writer exhaustion switches to real OpenRouter request format with zero-price routing',async()=>{
+  const urls=[];const written=await writeCloudPart([cue],[],{env:{...env,OPENROUTER_API_KEY:'test-router'},fetcher:async(url,options)=>{urls.push(url);const body=JSON.parse(options.body);if(url.includes('googleapis'))return {ok:false,status:429,json:async()=>({})};assert.equal(body.model,'openrouter/free');assert.deepEqual(body.provider.max_price,{prompt:0,completion:0});assert.equal(body.models,undefined);assert.equal(body.provider.require_parameters,true);assert.equal(body.response_format.type,'json_schema');assert.equal(body.response_format.json_schema.schema.type,'object');assert.equal(body.response_format.json_schema.schema.additionalProperties,false);return response({choices:[{finish_reason:'stop',message:{content:JSON.stringify(draft)}}]});}});
+  assert.equal(written.provider,'openrouter');assert.equal(urls.length,2);assert.deepEqual(written.retained,[]);
+});
+
+test('All exhausted writers still produce an explicitly labelled complete source draft',async()=>{
+  let calls=0;const written=await writeCloudPart([cue],[],{env:{...env,OPENROUTER_API_KEY:'test-router'},fetcher:async()=>{calls++;return {ok:false,status:503,json:async()=>({})};}});
+  assert.equal(calls,2);assert.equal(written.provider,'source');assert.deepEqual(written.retained,[cue.id]);assert.equal(written.draft.sections[0].markdown,cue.text);assert.match(written.draft.sections[0].uncertainties[0],/unavailable/);
+});
+
+test('An unreadable source is rejected, without accepting a weaker text-only video fallback',async()=>{
+  let calls=0;await assert.rejects(extractVideo('https://www.youtube.com/watch?v=kCc8FmEb1nY',0,90,{env:{...env,OPENROUTER_API_KEY:'router'},fetcher:async()=>{calls++;return modelResponse({title:'Course',author:'Teacher',segments:[cue],evidence:[{at:10,kind:'code',content:'unreadable',complete:false}],uncertainties:[]});}}),/not silently accepted/);assert.equal(calls,1);
+  assert.ok(freeRoutes({...env,OPENROUTER_API_KEY:'router'},'video').every(r=>r.provider==='gemini'));
+});
+
+test('Known exhausted routes are skipped without spending requests and cancellation stops fallback',async()=>{
+  let attempts=0;const result=await withFreeFallback('writer',async r=>r.provider,{env:{...env,OPENROUTER_API_KEY:'router'},capacity:{cooldown:async r=>r.provider==='gemini'?3600:0},beforeAttempt:async()=>attempts++});assert.equal(result.data,'openrouter');assert.equal(attempts,1);
+  const control=new AbortController();await assert.rejects(withFreeFallback('video',async()=>{control.abort();throw providerError(503);},{env,signal:control.signal}),e=>e.name==='AbortError');
+});
+
+test('An individual video provider timeout can fail over within the overall request deadline',async()=>{
+  let calls=0;const part=await extractVideo('https://www.youtube.com/watch?v=kCc8FmEb1nY',0,90,{env,fetcher:async(_url,options)=>{assert.ok(options.signal);if(++calls===1)throw new DOMException('Slow provider','TimeoutError');return modelResponse({title:'Test',author:'Teacher',segments:[cue],evidence:[],uncertainties:[]});}});assert.equal(calls,2);assert.equal(part.model,'gemini-3.8-flash');
+});
+
+test('Provider daily cooldowns follow Pacific midnight, including DST, and errors never echo provider bodies',()=>{
+  assert.equal(pacificResetSeconds(new Date('2026-07-01T06:00:00Z')),3600);
+  assert.equal(pacificResetSeconds(new Date('2026-01-01T07:00:00Z')),3600);
+  const error=providerError(429,{error:{message:'secret-provider-data',details:[{quotaMetric:'requestsPerDayPerProject'}]}},undefined,'gemini',new Date('2026-07-01T00:00:00Z'));assert.equal(error.retryAfter,7*3600);assert.doesNotMatch(error.message,/secret-provider-data/);
+  assert.equal(providerError(429,{error:{details:[{retryDelay:'32s'}]}}).retryAfter,32);
+  assert.equal(providerError(429,{error:{message:'Daily free allowance exhausted'}},undefined,'openrouter',new Date('2026-01-01T23:59:30Z')).retryAfter,30);
+});
+
+test('Public source cache and provider cooldowns are persistent, bounded and expire',async()=>{
+  const records=new Map(),commands=[];let time=100000;const store=createCloudCapacity({env,now:()=>time,fetcher:async(_url,options)=>{const command=JSON.parse(options.body);commands.push(command);if(command[0]==='GET')return response({result:records.get(command[1])??null});records.set(command[1],command[2]);return response({result:'OK'});}});
+  const route={provider:'gemini',model:'gemini-3.6-flash'},part={start:0,end:90,segments:[cue],evidence:[]};
+  await store.saveSource('https://www.youtube.com/watch?v=kCc8FmEb1nY',0,90,part);assert.deepEqual(await store.source('https://www.youtube.com/watch?v=kCc8FmEb1nY',0,90),part);assert.equal(await store.source('https://www.youtube.com/watch?v=kCc8FmEb1nY',90,180),null);
+  await store.pause(route,45);assert.equal(await store.cooldown(route),45);time+=46000;assert.equal(await store.cooldown(route),0);assert.ok(commands.some(c=>c.at(-1)==='86400'));assert.doesNotMatch(JSON.stringify([...records.keys()]),/test-quota-secret/);
+});
+
+test('Cached source reads are returned across equivalent YouTube URLs without a provider or quota request',async()=>{
+  let reads=0;const part={start:0,end:90,segments:[cue],evidence:[]};const capacity={source:async(url)=>{reads++;assert.equal(url,'https://www.youtube.com/watch?v=kCc8FmEb1nY');return part;}};
+  const result=await api({action:'extract',url:'https://youtu.be/kCc8FmEb1nY',start:0,end:90},{env,capacity,reserve:()=>assert.fail('cache must not reserve'),fetcher:()=>assert.fail('cache must not call a model')});assert.equal(result.status,200);assert.equal(result.body.reused,true);assert.equal(reads,1);
+});
+
+test('Malformed and empty writer outputs recover source instead of stranding a completed video read',async()=>{
+  for(const content of ['not JSON',null,'{"sections":[null]}']){
+    const written=await writeCloudPart([cue],[],{env:{OPENROUTER_API_KEY:'test'},fetcher:async()=>response({choices:[{finish_reason:'stop',message:{content}}]})});
+    assert.deepEqual(written.retained,[cue.id]);assert.equal(written.draft.sections[0].markdown,cue.text);
+  }
+});
+
+test('A fully recovered source chapter remains exportable and is not labelled an AI-written lesson',async()=>{
+  const parts=completeParts();for(const part of parts)part.writing={...part.writing,provider:'source',retained:part.segments.map(s=>s.id),recoveryReason:'capacity'};
+  const result=assembleCloudCourse({url:'https://youtu.be/kCc8FmEb1nY',start:0,duration:300,parts});assert.equal(result.generated.mode,'source');assert.ok(result.generated.warnings.some(w=>/providers were unavailable/.test(w)));assert.equal(result.report.segmentCoverage.covered,4);
+  const pdf=await api({action:'pdf',result},{env:{}});assert.equal(pdf.status,200);assert.equal(pdf.body.subarray(0,5).toString(),'%PDF-');
 });

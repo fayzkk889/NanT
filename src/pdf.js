@@ -87,11 +87,11 @@ export async function createChapterPDF(result, styleName = 'textbook', {edition=
     for (let i = 0; i < lines.length; i++) { space(leading * (i === 0 && lines.length > 1 ? 2 : 1)); draw(lines[i], margin, y, font, size, tint); y -= leading; }
     y -= after;
   }
-  function heading(text, level = 2) {
+  function heading(text, level = 2, following = 70) {
     const size = level === 1 ? (edition==='notes'?24:30) : level === 2 ? (edition==='notes'?15:19) : 11;
     const font = level === 3 ? sans : style.serif ? serif : sans;
     const lines = wrap(proseText(text), font, size);
-    space(lines.length * (size + 5) + 70);
+    space(lines.length * (size + 5) + Math.min(following,height-200) + 26);
     y -= level === 2 ? 14 : 5;
     for (const line of lines) { draw(line, margin, y, font, size, level === 3 ? accent : ink); y -= size + 5; }
     y -= 7;
@@ -141,6 +141,13 @@ export async function createChapterPDF(result, styleName = 'textbook', {edition=
     }
   }
   function timestampLabel(text) { space(25); draw(text, margin, y, mono, 7.5, accent); y -= 22; }
+  function nextParagraphHeight(text){return wrap(proseText(text),body,style.body).length*style.leading+(edition==='notes'?7:11)+(timestamps?21:0);}
+  function nextCodeHeight(text){
+    const lines=clean(text).split('\n'),longest=Math.max(...lines.map(line=>mono.widthOfTextAtSize(line,1)),1);
+    const size=Math.min(edition==='notes'?8.2:styleName==='companion'?9.3:8.7,(usable-28)/longest),actual=Math.max(7.5,size);
+    const count=lines.reduce((n,line)=>n+Math.max(1,Math.ceil(mono.widthOfTextAtSize(line,actual)/(usable-28))),0);
+    return count*actual*(edition==='notes'?1.3:1.55)+35+(size<7.5?35:0)+(timestamps?21:0);
+  }
   async function imageRecord(event,prepared=null,maxHeight=340) {
     if (!event.image) return;
     const [prefix, base64] = event.image.split(',');
@@ -174,7 +181,7 @@ export async function createChapterPDF(result, styleName = 'textbook', {edition=
     const rank={section:0,example:1,record:2,material:3};stream.sort((a,b)=>a.at-b.at || rank[a.type]-rank[b.type] || (a.index || 0)-(b.index || 0));
     for(const entry of stream){
       if(entry.type==='section'){
-        heading(entry.section.heading);timestamp(entry.at);
+        heading(entry.section.heading,2,nextParagraphHeight(entry.section.markdown.split(/\n\s*\n/)[0]));timestamp(entry.at);
         for(const part of entry.section.markdown.split(/\n\s*\n/))paragraph(part);
         for(const note of entry.section.uncertainties || [])paragraph('Review note: '+note,{font:sans,size:8.5,leading:12,tint:muted,after:8});
       }else if(entry.type==='material'){
@@ -185,7 +192,7 @@ export async function createChapterPDF(result, styleName = 'textbook', {edition=
       }else if(entry.type==='example'){
         heading('Worked example',3);timestamp(entry.at);codeBlock(`Encoded IDs: ${JSON.stringify(entry.example.encoded)}\nDecoded text: ${JSON.stringify(entry.example.decoded)}${entry.example.vocabSize?`\nVocabulary size: ${entry.example.vocabSize}`:''}`,'example');
       }else{
-        heading(entry.event.title,3);timestamp(entry.at);
+        heading(entry.event.title,3,['code','terminal'].includes(entry.event.kind)?nextCodeHeight(entry.event.content):nextParagraphHeight(entry.event.content));timestamp(entry.at);
         if(['code','terminal'].includes(entry.event.kind))codeBlock(entry.event.content,entry.event.kind);else paragraph(entry.event.content);
       }
     }
