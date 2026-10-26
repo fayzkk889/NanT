@@ -1,6 +1,6 @@
 # NanT — not an average notetaker
 
-[Live app (beta)](https://nant-sepia.vercel.app) · [Free hosting setup](DEPLOYMENT.md)
+[Live app (beta)](https://nant.live/) · [Product Hunt launch](https://www.producthunt.com/products/nant?launch=nant) · [Free hosting setup](DEPLOYMENT.md)
 
 An open-source tool for turning programming tutorial videos into written course chapters with ordered explanations, code screens, timestamp links and styled PDFs.
 
