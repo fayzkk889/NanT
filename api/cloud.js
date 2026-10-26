@@ -8,6 +8,7 @@ import {restoreChapter} from '../src/restore.js';
 import {createChapterPDF} from '../src/pdf.js';
 import {readFile} from 'node:fs/promises';
 import {createCloudCapacity} from '../src/cloud-capacity.js';
+import {SOURCE_PART_SECONDS} from '../public/source-policy.js';
 
 const MAX_BODY=1_500_000;
 async function bodyJSON(req){
@@ -40,7 +41,7 @@ export function createCloudHandler({env=process.env,fetcher=fetch,reserve=reserv
       }
       if(input.action==='finalize')return send(200,assembleCloudCourse(input));
       if(!['extract','write'].includes(input.action))return send(400,{error:'Unknown conversion step.'});
-      if(input.action==='extract'){parseYouTubeURL(input.url);if(!Number.isFinite(input.start)||!Number.isFinite(input.end)||input.start<0||input.end<=input.start||input.end-input.start>90||input.end>86400)return send(400,{error:'Choose a valid video part of at most 90 seconds.'});if(!cloudProviders(env).video)return send(503,{error:'YouTube conversion is being connected. The sample and exports work now.'});}
+      if(input.action==='extract'){parseYouTubeURL(input.url);if(!Number.isFinite(input.start)||!Number.isFinite(input.end)||input.start<0||input.end<=input.start||input.end-input.start>SOURCE_PART_SECONDS||input.end>86400)return send(400,{error:'Refresh NanT to read video in parts of at most 30 seconds.'});if(!cloudProviders(env).video)return send(503,{error:'YouTube conversion is being connected. The sample and exports work now.'});}
       if(input.action==='write'){
         if(!cloudProviders(env).writer)return send(503,{error:'The free writing connection is being connected. Try the sample.'});
         if(!Array.isArray(input.segments)||!input.segments.length||input.segments.length>150||JSON.stringify({segments:input.segments,evidence:input.evidence}).length>90000)return send(400,{error:'Supply one bounded source part.'});

@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {SOURCE_REVISION} from '../public/source-policy.js';
 
 // Reuse only machine-read public YouTube source. Never cache supplied transcripts,
 // private notes or credentials. State survives separate serverless instances.
@@ -11,7 +12,7 @@ export function createCloudCapacity({env,fetcher=fetch,now=()=>Date.now()}){
     const data=await response.json();if(data.error)throw new Error('Capacity store unavailable');return data.result;
   }
   const routeKey=route=>`nant:cooldown:v1:${route.provider}:${route.model}`;
-  const sourceKey=(url,start,end)=>`nant:source:v2:${createHash('sha256').update(JSON.stringify([url,start,end])).digest('hex')}`;
+  const sourceKey=(url,start,end)=>`nant:source:${SOURCE_REVISION}:${createHash('sha256').update(JSON.stringify([url,start,end])).digest('hex')}`;
   return {
     async cooldown(route){const until=Number(await command(['GET',routeKey(route)]));return Math.max(0,Math.ceil((until-now())/1000));},
     async pause(route,seconds){const ttl=Math.max(1,Math.ceil(seconds));await command(['SET',routeKey(route),String(now()+ttl*1000),'EX',String(ttl)]);},

@@ -4,7 +4,7 @@ export const GEMINI_FREE_MODELS=['gemini-3.8-flash','gemini-3.6-flash','gemini-3
 export function freeRoutes(env,role){
   const routes=[];
   if(env.GEMINI_API_KEY&&env.GEMINI_FREE_TIER_CONFIRMED==='true'){
-    const models=role==='video'?[env.GEMINI_MODEL||'gemini-3.6-flash',...(env.GEMINI_VIDEO_FALLBACK_MODELS??'gemini-3.8-flash').split(',').map(s=>s.trim()).filter(Boolean)]:[env.GEMINI_WRITER_MODEL||'gemini-3.5-flash-lite'];
+    const models=role==='video'?[env.GEMINI_MODEL||'gemini-3.6-flash',...(env.GEMINI_VIDEO_FALLBACK_MODELS??'gemini-3.5-flash-lite,gemini-3.8-flash').split(',').map(s=>s.trim()).filter(Boolean)]:[env.GEMINI_WRITER_MODEL||'gemini-3.5-flash-lite'];
     if(models.some(model=>!GEMINI_FREE_MODELS.includes(model)))throw Object.assign(new Error('The selected model is not on NanT’s free-tier allowlist.'),{status:503});
     for(const model of new Set(models))routes.push({provider:'gemini',model});
   }
@@ -14,6 +14,7 @@ export function freeRoutes(env,role){
 }
 
 export function providerError(status,data={},retryHeader,provider='gemini',now=new Date()){
+  if(status===400)return Object.assign(new Error('The model could not accept this source or writing batch. Your completed source is saved.'),{status:502,providerStatus:400,invalidOutput:true});
   const details=JSON.stringify(data).slice(0,16000),daily=/per.?day|daily|\bRPD\b/i.test(details),retryInfo=details.match(/"retryDelay"\s*:\s*"([\d.]+)s"/);
   const delay=Number(retryHeader)||Number(retryInfo?.[1])||60;
   const dailyReset=provider==='openrouter'?Math.max(1,Math.ceil((Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()+1)-now.getTime())/1000)):pacificResetSeconds(now);

@@ -59,8 +59,12 @@ export function validateDraft(draft, segments,examples=[]) {
     if (typeof section.heading !== 'string' || !section.heading.trim() || section.heading.length > 300 || !Array.isArray(section.segment_ids) || !section.segment_ids.length ||
       typeof section.markdown !== 'string' || !section.markdown.trim() || section.markdown.length > 100000 || section.markdown.includes('```') ||
       !Array.isArray(section.uncertainties) || section.uncertainties.some(x => typeof x !== 'string' || x.length > 2000)) throw new Error('invalid_draft');
-    if((section.markdown.match(/(?<!\\)`/g) || []).length%2 || /\b(?:and|or|with|the|a|an|to|of|into|by|from)\s*$/i.test(section.markdown))throw new Error('unfinished_passage');
     const source=segments.filter(row=>section.segment_ids.includes(row.id)).map(row=>row.text).join(' ');
+    // Acquisition intervals may cut a sentence or a spoken code span. Exact
+    // source recovery must remain exportable without inventing its completion.
+    // Compute this from the text, never from a claimed "retained" flag.
+    const verbatim=section.markdown.trim().replace(/\s+/g,' ')===source.trim().replace(/\s+/g,' ');
+    if(!verbatim&&((section.markdown.match(/(?<!\\)`/g) || []).length%2 || /\b(?:and|or|with|the|a|an|to|of|into|by|from)\s*$/i.test(section.markdown)))throw new Error('unfinished_passage');
     if(/\b(?:single|double)\s+quote\b/i.test(source) && /\b(?:single|double)\s+(?:comma|code unit)\b/i.test(section.markdown))throw new Error('changed_string_delimiter');
     for(const identifier of new Set(source.match(/\b[A-Za-z]\w*_[A-Za-z]\w*\b/g) || []))if(section.markdown.includes('`'+identifier.replaceAll('_',' ')+'`'))throw new Error('changed_identifier_spelling');
     if(section.markdown.length>source.length*1.55+150)throw new Error('unsupported_expansion');

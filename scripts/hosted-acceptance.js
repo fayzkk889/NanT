@@ -4,6 +4,7 @@ import {parseArgs} from 'node:util';
 import {parseYouTubeURL} from '../src/youtube.js';
 import {chapterParts,writingBatches,applyWritingBatch} from '../public/cloud-course.js';
 import {cloudRequest} from '../public/cloud-request.js';
+import {SOURCE_REVISION} from '../public/source-policy.js';
 
 // Manual real-provider check; never part of npm test or CI. Calls use the public
 // API, its shared counters and its normal free-only routing. No keys are needed.
@@ -14,7 +15,7 @@ if(!Number.isFinite(start)||start<0||![300,480,600].includes(duration))throw new
 if(endpoint.protocol!=='https:'&&!['127.0.0.1','localhost'].includes(endpoint.hostname))throw new Error('Use HTTPS for a remote service.');
 const directory=resolve('.local-data/hosted-acceptance');await mkdir(directory,{recursive:true});
 const file=resolve(directory,`${source.id}-${start}-${duration}.json`),pdfFile=file.replace(/\.json$/,'.pdf');
-let state={input:{url:source.url,start,duration},parts:[]};try{state=JSON.parse(await readFile(file,'utf8'));}catch{}
+let state={input:{url:source.url,start,duration},sourceRevision:SOURCE_REVISION,parts:[]};try{const saved=JSON.parse(await readFile(file,'utf8'));if(saved.sourceRevision===SOURCE_REVISION)state=saved;else if(saved.parts?.every(p=>p.sourceRevision===SOURCE_REVISION)){state={...saved,sourceRevision:SOURCE_REVISION};}}catch{}
 const signal=AbortSignal.timeout(15*60*1000),save=()=>writeFile(file,JSON.stringify(state,null,2));
 const call=(action,body)=>cloudRequest(action,body,{signal,fetcher:(_url,options)=>fetch(endpoint,options),onPause:seconds=>console.log(JSON.stringify({waitingSeconds:seconds,checkpointSaved:true}))});
 try{

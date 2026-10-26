@@ -1,6 +1,6 @@
 # NanT — not an average notetaker
 
-[Live web preview](https://nant-sepia.vercel.app) · [Free hosting setup](DEPLOYMENT.md)
+[Live app (beta)](https://nant-sepia.vercel.app) · [Free hosting setup](DEPLOYMENT.md)
 
 An open-source tool for turning programming tutorial videos into written course chapters with ordered explanations, code screens, timestamp links and styled PDFs.
 
@@ -34,6 +34,8 @@ The source archive excludes credentials, recordings, private jobs, model weights
 
 The hosted service tries compatible free Gemini video readers, then Gemini/OpenRouter for writing. Public video source reads are reused for 24 hours. The daily per-connection cap is disabled by default; shared provider capacity, a global service counter and short-term protection still apply. No paid fallback is selected.
 
-A complete draft is reviewable output, not independently certified fidelity. Important code and concepts must be checked against the retained source images. See [current acceptance results](USER-TEST-REPORT.md); older reports are retained as history.
+A complete draft is reviewable output, not independently certified fidelity. Important code and concepts must be checked against the retained source images. See [current release checks](RELEASE-CHECK-2026-10-26.md); older reports are retained as history.
 
 The hosted path is tested separately: a real five-minute Karpathy chapter completed through the public service and exported as a six-page PDF on 22 October 2026. It retained 19 acquired speech passages and 10 typed visual records; 15 passages used source wording after rewrite validation failed. Source completeness and semantic accuracy remain unmeasured. See [live deployment checks and limitations](DEPLOYMENT.md#deployment-check--22-october-2026). Hosted results do not inherit the local model's acceptance results.
+
+The 26 October reader fixes use 30-second clips, fixed acquisition cells, versioned source reuse, coherent paragraph writing and a tested free Flash-Lite video fallback. The previously omitted Python explanation is recovered in the real-source regression. [Tests, exports and remaining limits](RELEASE-CHECK-2026-10-26.md).

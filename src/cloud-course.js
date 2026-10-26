@@ -5,18 +5,19 @@ import {parseYouTubeURL} from './youtube.js';
 import {validateDraft} from './generation.js';
 import {verify} from './verification.js';
 import {renderMarkdown} from './markdown.js';
+import {SOURCE_PART_SECONDS} from '../public/source-policy.js';
 
 export function assembleCloudCourse(input){
   const {start,duration,parts}=input;
   assert(Number.isFinite(start)&&start>=0&&[300,480,600].includes(duration)&&start+duration<=86400,'Choose a 5–10-minute chapter.');
-  assert(Array.isArray(parts)&&parts.length>0&&parts.length<=8,'The saved chapter has invalid parts.');
+  assert(Array.isArray(parts)&&parts.length>0&&parts.length<=20,'The saved chapter has invalid parts.');
   const isTranscript=input.sourceType==='local';
   let source;
   if(isTranscript)source={id:'local-import',kind:'local-import',title:String(input.title||'My programming lesson').slice(0,300),author:'User-supplied transcript',url:null,synthetic:false};
   else source={...parseYouTubeURL(input.url),title:String(parts[0].title||'Programming lesson').slice(0,300),author:String(parts[0].author||'Original video creator').slice(0,200),synthetic:false,metadataOrigin:'Video reader metadata; verify original attribution'};
   const segments=parts.flatMap(part=>part.segments),normalized=parseTranscript(segments);
   assert(segments.every((row,i)=>row.id===normalized[i].id),'The saved chapter has missing or repeated source IDs.');
-  if(!isTranscript){let cursor=start;for(const part of parts){assert(part.start===cursor&&part.end>cursor&&part.end-cursor<=90,'A video part is missing or out of order.');cursor=part.end;}assert(cursor===start+duration,'The video window is incomplete.');}
+  if(!isTranscript){let cursor=start;for(const part of parts){assert(part.start===cursor&&part.end>cursor&&part.end-cursor<=SOURCE_PART_SECONDS,'A video part is missing or out of order. Refresh and reread its source.');cursor=part.end;}assert(cursor===start+duration,'The video window is incomplete.');}
   const chapter=selectChapter(normalized,start,duration),evidence=normalizeEvidence(parts.flatMap(part=>part.evidence||[]));
   const draft={title:parts[0].writing?.draft?.title||source.title,sections:parts.flatMap(part=>part.writing?.draft?.sections||[])};
   validateDraft(draft,chapter.segments);
