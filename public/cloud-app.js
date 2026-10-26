@@ -25,7 +25,7 @@ function showResult(result){
   for(const warning of [...result.generated.warnings,...result.report.warnings])target.append(node('p',warning,'hint'));
   for(const segment of result.chapter.segments){const details=node('details',null,'evidence-card');details.append(node('summary',`${formatTime(segment.start)} · ${segment.heading||'Original explanation'}`),node('pre',segment.text));target.append(details);}
   for(const record of result.evidence){const details=node('details',null,'evidence-card');details.append(node('summary',`${formatTime(record.at)} · ${record.title}`),node('pre',record.content));target.append(details);}
-  $('export-pdf').disabled=busy;$('mobile-pdf').disabled=busy;$('state-badge').textContent='Ready for a closer read';$('pdf-hint').textContent='Every explanation stays. Pick a layout and take it with you.';view('read');
+  $('export-pdf').disabled=busy;$('mobile-pdf').disabled=busy;$('state-badge').textContent='Ready for a closer read';$('pdf-hint').textContent='Pick a layout and take your chapter with you. Review it against the original lesson.';view('read');
 }
 function sourceKind(){const local=$('source-kind').value==='local';$('video-fields').classList.toggle('hidden',local);$('local-source-fields').classList.toggle('hidden',!local);$('url').required=!local;$('local-title').required=local;if(local)$('source-details').open=true;}
 function updateUsage(data){if(data)$('model-status').textContent=data.visitorRemaining==null?'Free shared connection · progress saved as you go':`${data.visitorRemaining} free steps left today on this connection · resets ${data.resets}`;}
