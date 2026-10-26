@@ -29,7 +29,7 @@ These structural checks reduce failure modes; they do not prove semantic complet
 | Independent source comparison | Used YouTube's normal transcript UI/export, separately from NanT's reader. Comparison found the original missing Python transition recovered and no further omitted interior passage in these two sampled windows. Surrounding caption context outside the requested windows was excluded from omission claims. |
 | C teaching-point review | Retained semicolons, printing twice, newline characters, the triangle, changing instruction order, variables as containers, and the George/70 story example. Source and final displayed Markdown are saved privately for review. |
 | Recovery | Real provider exhaustion, invalid source response, resume from saved source, cached reuse, source retention, assembly and export exercised. The C form resumed at its unfinished step after test-server restarts. |
-| Browser file save | PDF-button completion checked. A regular Chrome file-save check remains unconfirmed: app-control approval timed out. Earlier in-app download-event automation also stalled. Neither is evidence of a product download failure. |
+| Browser file save | Pass on production: captured the download together with its button click, received an actual file in Downloads, reopened the 33,363-byte nine-page C PDF, extracted its teaching content and rendered representative pages. Earlier automation failures were resolved for this check. |
 
 Private reference captions, reader responses, final displayed Markdown, exported JSON/PDF and rendered pages are in ignored `.local-data/user-test/` and `.local-data/hosted-acceptance/`. Generated creator course material is not committed to the public repository.
 
@@ -45,4 +45,12 @@ No 90% or 95% accuracy figure has been measured. Machine speech and code can con
 
 ## Production
 
-Production deployment and smoke-check results are recorded here after publishing.
+Published code commit **7609564** to GitHub and deployed it to the existing Vercel production project. Deployment `dpl_HVs9srcJkzyHngMwWW58tuiTbdve` reached **READY** and was aliased to [nant-sepia.vercel.app](https://nant-sepia.vercel.app/).
+
+Anonymous HTTP checks returned 200 for the homepage, public configuration and new source policy; `/.env` returned 404. Configuration reports Gemini and OpenRouter connected, shared allowance 80 and daily per-connection cap 0.
+
+A **new uncached production source request**, Python 19:58–20:28, returned 200 using **Gemini 3.5 Flash-Lite**. It included the two variables, replacing the story literal and the print-statement transition. This confirms the deployed source reader and compatible free video fallback, separate from cached chapter reruns.
+
+The public browser form then completed the C 17:00–22:00 chapter, displayed all 29 acquired passages and 20 visual records, and generated its PDF. The actual browser download was saved, reopened and checked as described above. Final Python example code was also checked with restricted AST evaluation (no imported code executed): syntax and the demonstrated variable-reassignment values were correct.
+
+The source-omission release blocker is resolved in these sampled chapters. The site is live for a **limited public beta**, with the fidelity and finite-capacity limits above. No paid service or plan was enabled.

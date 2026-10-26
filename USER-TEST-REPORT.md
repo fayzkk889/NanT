@@ -1,6 +1,6 @@
 # Course Zero 0.5 — local MVP release checks
 
-For the latest hosted release decision, see [the 25 October user acceptance test](USER-POV-REPORT.md): **release is on hold after an independently observed source omission**. The older local checks below do not establish hosted source completeness.
+For the current hosted release decision, see [the 26 October fixes and production checks](RELEASE-CHECK-2026-10-26.md). The original source omission is recovered and the real production PDF download passed. This document preserves earlier local checks.
 
 21 October 2026. This is a working local MVP for reviewable written chapters and styled PDFs. The recommended release workflow is one 5–10 minute chapter at a chosen timestamp, including for long courses. Full-video conversion remains experimental. Website redesign, hosting and deployment are outside this release. No cloud model API key is used.
 
